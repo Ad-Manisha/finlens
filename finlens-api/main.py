@@ -1,8 +1,8 @@
 import bcrypt
 from fastapi import FastAPI, Depends, status, HTTPException
-from schemas import RegisterUserRequest, RegisterUserResponse, LoginUserRequest
+from schemas import RegisterUserRequest, RegisterUserResponse, LoginUserRequest, ReceiptResponse
 from database import Base, engine, SessionLocal
-from models import User
+from models import User, Receipt
 from sqlalchemy.orm import Session
 from utils import verify_password
 
@@ -84,3 +84,23 @@ def login_user(user: LoginUserRequest, db: Session = Depends(get_db)):
             "email": db_user.email
         }
     }
+
+# Add Receipt
+
+@app.post("/receipts", response_model=ReceiptResponse)
+def create_receipt(receipt: ReceiptCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    # Ensure the user is authenticated before creating the receipt
+    db_receipt = Receipt(subject=receipt.subject, amount=receipt.amount, user_id=user.id)
+    
+    db.add(db_receipt)
+    db.commit()
+    db.refresh(db_receipt)
+    
+    return db_receipt
+
+@app.get("/receipts/{user_id}", response_model=List[ReceiptResponse])
+def get_receipts(user_id: int, db: Session = Depends(get_db)):
+    receipts = db.query(Receipt).filter(Receipt.user_id == user_id).all()
+    if not receipts:
+        raise HTTPException(status_code=404, detail="No receipts found for this user")
+    return receipts
