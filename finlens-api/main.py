@@ -1,8 +1,9 @@
 import bcrypt
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Depends, status, HTTPException
-from schemas import RegisterUserRequest, RegisterUserResponse, LoginUserRequest, ReceiptResponse
+from schemas import RegisterUserRequest, RegisterUserResponse, LoginUserRequest
 from database import Base, engine, SessionLocal
-from models import User, Receipt
+from models import User
 from sqlalchemy.orm import Session
 from utils import verify_password
 
@@ -12,6 +13,18 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+origins = [
+    
+    "http://localhost:5173",  # For React apps running on port 3000, for example
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # Specify allowed origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+)
 
 #Db session
 def get_db():
@@ -85,22 +98,3 @@ def login_user(user: LoginUserRequest, db: Session = Depends(get_db)):
         }
     }
 
-# Add Receipt
-
-@app.post("/receipts", response_model=ReceiptResponse)
-def create_receipt(receipt: ReceiptCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Ensure the user is authenticated before creating the receipt
-    db_receipt = Receipt(subject=receipt.subject, amount=receipt.amount, user_id=user.id)
-    
-    db.add(db_receipt)
-    db.commit()
-    db.refresh(db_receipt)
-    
-    return db_receipt
-
-@app.get("/receipts/{user_id}", response_model=List[ReceiptResponse])
-def get_receipts(user_id: int, db: Session = Depends(get_db)):
-    receipts = db.query(Receipt).filter(Receipt.user_id == user_id).all()
-    if not receipts:
-        raise HTTPException(status_code=404, detail="No receipts found for this user")
-    return receipts

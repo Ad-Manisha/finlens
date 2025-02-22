@@ -3,6 +3,8 @@ import { FaHome, FaWallet, FaQuestionCircle, FaPlus, FaChartLine, FaUser } from 
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import './Home.css';
+import { SiCoggle } from 'react-icons/si';
+import { Link } from 'react-router-dom';
 
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -13,6 +15,9 @@ const Home = () => {
     subject: '',
     amount: ''
   });
+
+  const authUser = localStorage.getItem('user');
+  const parsedUser = authUser ? JSON.parse(authUser) : null;
 
   const [error, setError] = useState('');
 
@@ -73,17 +78,14 @@ const Home = () => {
       {/* Sidebar */}
       <div className="sidebar">
         <div className="profile-section">
-        {/* <i class="fa fa-user" aria-hidden="true">Profile</i> */}
-        <FaUser /> Profile
+          {/* <i class="fa fa-user" aria-hidden="true">Profile</i> */}
+          <FaUser /> {parsedUser.user.name}
         </div>
         <ul className="sidebar-links">
-          <li><FaHome /> Home</li>
+          <li><Link to="/"><FaHome /> Home</Link> </li>
           <li><FaWallet /> Expenses</li>
           <li><FaQuestionCircle /> Support</li>
         </ul>
-        <div className="sidebar-bottom">
-          <span className="finlens-text">FinLens</span>
-        </div>
       </div>
 
       {/* Main Content */}
@@ -131,6 +133,7 @@ const Home = () => {
         </div>
 
         {/* Receipt Form (Conditional Rendering) */}
+
         {isFormVisible && (
           <div className="box receipt-form">
             <h3>Add Receipt</h3>
@@ -156,8 +159,12 @@ const Home = () => {
                   required
                 />
               </label>
-              <button type="submit">Submit</button>
-              <button type="button" onClick={() => setIsFormVisible(false)}>Cancel</button>
+              {/* <button type="submit">Submit</button> */}
+              {/* <button className='btn btn-success btn-sm'>Submit</button> */}
+              <div>
+                <button className="orange">Submit</button>
+                <button className="btn btn-danger btn-sm ms-2" type="button" onClick={() => setIsFormVisible(false)}>Cancel</button>
+              </div>
             </form>
           </div>
         )}
