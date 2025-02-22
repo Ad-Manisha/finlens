@@ -53,7 +53,9 @@
   margin-bottom: 20px;
 }
 
-.recent-expenses, .monthly-report, .quick-access {
+.recent-expenses,
+.monthly-report,
+.quick-access {
   background-color: #f2f3f3;
 }
 
@@ -63,7 +65,7 @@
 }
 
 .orange {
-  background-color: #d68c15;
+  background-color: #026924;
   color: white;
   padding: 10px 15px;
   border: none;
@@ -72,14 +74,15 @@
 }
 
 .orange:hover {
-  background-color: #e67e22;
+  background-color: #f5821d;
 }
 
 /* Receipt Form Styles */
 .receipt-form form {
   display: flex;
   flex-direction: column;
-  gap: 15px;  /* Adds space between form elements */
+  gap: 15px;
+  /* Adds space between form elements */
 }
 
 .receipt-form label {
@@ -87,15 +90,39 @@
 }
 
 .receipt-form input {
-  padding:5px;
+  padding: 5px;
   font-size: 14px;
   border-radius: 5px;
   border: 1px solid #ccc;
 }
 
-.receipt-form button {
+/* .receipt-form button {
   padding: 10px 15px;
   font-size: 16px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  background-color: #075743;
+  color: white;
+}
+
+.receipt-form button[type="button"] {
+  background-color: #e74c3c;
+}
+
+.receipt-form button:hover {
+  background-color: #395853;
+}
+
+.receipt-form button[type="button"]:hover {
+  background-color: #c0392b;
+} */
+
+.receipt-form button {
+  padding: 5px 10px;
+  /* Reduced padding for smaller size */
+  font-size: 14px;
+  /* Smaller font size */
   border: none;
   border-radius: 5px;
   cursor: pointer;
@@ -126,7 +153,8 @@
   border-collapse: collapse;
 }
 
-.expense-table th, .expense-table td {
+.expense-table th,
+.expense-table td {
   padding: 12px;
   text-align: left;
   border-bottom: 1px solid #ddd;
@@ -141,4 +169,3 @@
   width: 100%;
   height: 400px;
 }
-

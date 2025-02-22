@@ -26,16 +26,6 @@ class LoginUserRequest(BaseModel):
     password: str
 
 
-class ReceiptBase(BaseModel):
-    subject: str
-    amount: float
-
-class ReceiptCreate(ReceiptBase):
-    pass
-
-class ReceiptResponse(ReceiptBase):
-    id: int
-    user_id: int
 
     class Config:
         orm_mode = True
