@@ -25,4 +25,8 @@ class LoginUserRequest(BaseModel):
     email: str
     password: str
 
-    
+
+
+    class Config:
+        orm_mode = True
+
