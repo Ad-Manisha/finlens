@@ -1,10 +1,19 @@
 body {
-  background-color: rgba(4, 70, 131, 0.5) !important;
+  background-color: #0f172a !important;
+}
+
+.navbar .nav-link:hover {
+  color: #10b981 !important;
+  text-decoration: none;
+}
+
+.navbar .nav-link.active {
+  border-bottom: 2px solid #10b981;
 }
 
 .wrapper {
   height: 100%;
-  background-color: rgba(164, 176, 187, 0.5);
+  background-color: #1f2937;
 }
 
 .landing {

@@ -5,3 +5,9 @@ pydantic
 mysql-connector-python
 pymysql
 bcrypt
+tessaract-download
+pytesseract pillow
+python-multipart
+openai
+python-dotenv
+openai python-dotenv

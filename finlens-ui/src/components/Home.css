@@ -1,11 +1,12 @@
 /* General Styles */
 .home-container {
   display: flex;
+  height: 100vh;
 }
 
 .sidebar {
-  width: 250px;
-  background-color: #252527;
+  width: 220px;
+  background-color: #1f2937;
   padding: 20px;
   color: white;
 }
@@ -16,11 +17,17 @@
 }
 
 .sidebar-links li {
-  padding: 10px 0;
+  margin: 20px 0;
 }
 
-.sidebar-links li:hover {
-  background-color: #333232;
+.sidebar-links li a {
+  text-decoration: none;
+  color: white;
+}
+
+
+.sidebar-links li a:hover {
+  color: #f59e0b;
   cursor: pointer;
 }
 
@@ -30,7 +37,10 @@
 }
 
 .profile-section {
+  font-size: 24px;
+  margin-bottom: 30px;
   text-align: center;
+  color: #4ab665;
 }
 
 .profile-img {
@@ -44,10 +54,12 @@
 .main-content {
   flex: 1;
   padding: 20px;
+  background-color: #0f172a;
+  overflow: auto;
 }
 
 .box {
-  background-color: #f2f3f3;
+  background-color: #f1f5f9;
   padding: 20px;
   border-radius: 5px;
   margin-bottom: 20px;
@@ -65,8 +77,8 @@
 }
 
 .orange {
-  background-color: #026924;
-  color: white;
+  background-color: #10b981;
+  color: #f8fafc;
   padding: 10px 15px;
   border: none;
   border-radius: 5px;
@@ -74,7 +86,7 @@
 }
 
 .orange:hover {
-  background-color: #f5821d;
+  background-color:#b88e47;
 }
 
 /* Receipt Form Styles */

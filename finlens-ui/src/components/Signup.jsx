@@ -98,8 +98,8 @@ const Signup = () => {
                     Sign Up
                 </Button>
             </Form>
-            <small>Already have an account ?
-                <Link to={'/login'} className="text-decoration-none fw-bold text-success"> Sign In</Link>
+            <small className="text-white">Already have an account ?
+                <Link to={'/login'} className="text-decoration-none fw-bold " style={{color:'orange'}}>{''} Sign In</Link>
             </small>
         </Container>
     );

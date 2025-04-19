@@ -26,8 +26,14 @@ const Login = () => {
         // If login is successful, redirect to dashboard or home
 
         try {
-            const response = await axios.post(`${baseURL}/users/login`, data)
-            console.log('Response from login:', response);
+            const response = await axios.post(`${baseURL}/users/login`, data, {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            console.log('Login Success:', response);
+
             if (localStorage.getItem("user")) {
                 localStorage.removeItem("user");
             }
@@ -40,11 +46,19 @@ const Login = () => {
 
         } catch (error) {
             console.error('Error:', error);
-            if (error.status == 401 || error.status == 404) {
-                setError("Invalid Credential");
-            }
+            if (error.response) {
+                if (error.response && (error.response.status === 401 || error.response.status === 404)) {
+                    setError("Invalid credentials.");
+                } else {
+                    setError("Something went wrong.");
+                }
 
+            }
+            else {
+                setError("Network error or server is down.");
+            }
         }
+
     };
 
     return (
@@ -93,9 +107,9 @@ const Login = () => {
                 </Button>
             </Form>
 
-            <small>Don't have an account ?
+            <small className="text-white">Don't have an account ?
                 <Link to={'/signup'}
-                    className="text-decoration-none fw-bold text-success"> Register</Link>
+                    className="text-decoration-none fw-bold" style={{ color: 'orange' }}>{''} Register</Link>
             </small>
         </Container>
     );

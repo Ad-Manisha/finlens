@@ -3,6 +3,7 @@ import { FaHome, FaWallet, FaQuestionCircle, FaPlus, FaChartLine, FaUser } from 
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import './Home.css';
+import { SiCoggle } from 'react-icons/si';
 import { Link } from 'react-router-dom';
 
 
@@ -20,30 +21,24 @@ const Home = () => {
   const [error, setError] = useState('');
 
   const categorizeText = async (text) => {
-    const userId = parsedUser?.user?.id;
+    try {
+      const response = await fetch('http://localhost:8000/categorize-expense', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ text })
+      });
 
-    if (!userId) {
-      console.error("User ID is missing");
-      return;
+      const result = await response.json();
+      console.log("Categorized:", result.categorized);
+
+      setCategorizedData(result.categorized);
+
+      alert("Categorization successful!");
+    } catch (err) {
+      console.error("Error:", err);
     }
-
-    const response = await fetch(`http://localhost:8000/categorize-text?user_id=${userId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ text })
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error("Backend error:", result);
-      return;
-    }
-
-    console.log("Categorized:", result);
-    setCategorizedData(result.categorized);
   };
 
 
@@ -64,7 +59,7 @@ const Home = () => {
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://localhost:8000/upload-receipt', {
+      const response = await fetch('http://localhost:8000/extract-text', {
         method: 'POST',
         body: formData
       });
@@ -76,10 +71,8 @@ const Home = () => {
         setOcrText(result.text);  // Display the OCR'd text
         categorizeText(result.text);
         setError('');
+        /* setIsFormVisible(false); */
         alert("Text Extracted successfully!");
-        setIsFormVisible(false);
-        setFile(null);
-        setOcrText('');
       } else {
         setError(result.detail || "Failed to extract text.");
       }
@@ -88,18 +81,32 @@ const Home = () => {
     }
   };
 
+  // Dummy data for the bar chart
+  const data = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+    datasets: [
+      {
+        label: 'Expenses ($)',
+        data: [120, 150, 90, 170, 80, 200],
+        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+        borderColor: 'rgba(255, 99, 132, 1)',
+        borderWidth: 1
+      }
+    ]
+  };
+
   return (
     <div className="home-container">
       {/* Sidebar */}
       <div className="sidebar">
         <div className="profile-section">
           {/* <i class="fa fa-user" aria-hidden="true">Profile</i> */}
-          <FaUser /> {parsedUser?.user?.name || "Guest"}
+          <FaUser /> {parsedUser.user.name}
         </div>
         <ul className="sidebar-links">
           <li><Link to="/"><FaHome /> Home</Link> </li>
-          <li><Link to="*"><FaWallet /> Expenses</Link></li>
-          <li><Link to="*"><FaQuestionCircle /> Support</Link></li>
+          <li><FaWallet /> Expenses</li>
+          <li><FaQuestionCircle /> Support</li>
         </ul>
       </div>
 
@@ -117,20 +124,23 @@ const Home = () => {
                 </tr>
               </thead>
               <tbody>
-                {categorizedData && Object.keys(categorizedData).length > 0 ? (
-                  Object.entries(categorizedData).map(([category, amount]) => (
-                    <tr key={category}>
-                      <td>{category}</td>
-                      <td>{amount}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="2" style={{ textAlign: 'center' }}>No expenses yet.</td>
-                  </tr>
-                )}
+                <tr>
+                  <td>Food</td>
+                  <td>50</td>
+                </tr>
+                <tr>
+                  <td>Transportation</td>
+                  <td>30</td>
+                </tr>
+                <tr>
+                  <td>Entertainment</td>
+                  <td>20</td>
+                </tr>
+                <tr>
+                  <td>Shopping</td>
+                  <td>70</td>
+                </tr>
               </tbody>
-
             </table>
           </div>
 
@@ -172,7 +182,7 @@ const Home = () => {
               </div>
             )}
 
-            {categorizedData && typeof categorizedData === 'object' && Object.keys(categorizedData).length > 0 && (
+            {Object.keys(categorizedData).length > 0 && (
               <div className="box">
                 <h4>Categorized Expenses:</h4>
                 <table className="expense-table">
@@ -183,7 +193,7 @@ const Home = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {categorizedData && typeof categorizedData === 'object' && Object.entries(categorizedData).map(([category, amount]) => (
+                    {Object.entries(categorizedData).map(([category, amount]) => (
                       <tr key={category}>
                         <td>{category}</td>
                         <td>{amount}</td>
@@ -199,7 +209,7 @@ const Home = () => {
         )}
 
         {/* Monthly Report */}
-        {categorizedData && typeof categorizedData === 'object' && Object.keys(categorizedData).length > 0 && (
+        {Object.keys(categorizedData).length > 0 && (
           <div className="box">
             <h4>Expense Breakdown Chart:</h4>
             <Bar
