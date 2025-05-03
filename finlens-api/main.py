@@ -1,52 +1,62 @@
 import io 
 import json
-import openai
-from openai import OpenAI
 import pytesseract
+import os
+import re 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Users\manis\AppData\Local\Programs\Tesseract-OCR\tesseract.exe'
 import bcrypt
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, Depends, status, HTTPException, File, UploadFile, Request, APIRouter
+from fastapi import FastAPI, Depends, status, HTTPException, File, UploadFile, Request, Query
 from fastapi.responses import JSONResponse
-from schemas import RegisterUserRequest, RegisterUserResponse, LoginUserRequest
+from schemas import RegisterUserRequest, RegisterUserResponse, LoginUserRequest, BudgetRequest,TextRequest, ReceiptText
 from database import Base, engine, SessionLocal
 from pydantic import BaseModel
-from models import User, Expense
+from models import User, Expense, Budget
+from sqlalchemy import func
 from sqlalchemy.orm import Session
-from utils import verify_password
+from utils import  trained_model as model, verify_password, preprocess_line, categorize_text_local, call_ollama_model, strip_price, clean_line_start
 from PIL import Image
 from dotenv import load_dotenv
-import os
 import shutil
 from collections import defaultdict
-import re 
-from datetime import datetime
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+from typing import List
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.pipeline import make_pipeline
+from sklearn.naive_bayes import MultinomialNB
+import logging
+
+
+
 
 load_dotenv()
 
-client = OpenAI(api_key=os.getenv("OPEN_API_KEY"))
-
-class TextData(BaseModel):
-    text: str
-
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # create the table in the db if not created already
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-""" origins = [
-    
-    "http://localhost:5173",  # For React apps running on port 3000, for example
-] """
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Specify allowed origins
-    # allow_credentials=True,
+    allow_origins=origins,  # Specify allowed origins
+    allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
 )
+
+class TextData(BaseModel):
+    text: str
+
 
 #Db session
 def get_db():
@@ -125,115 +135,160 @@ def login_user(user: LoginUserRequest, db: Session = Depends(get_db)):
 
 @app.post("/upload-receipt")
 async def upload_receipt(file: UploadFile = File(...)):
-    contents = await file.read()
-    image = Image.open(io.BytesIO(contents))
-    text = str(pytesseract.image_to_string(image))
-    return {"text": text}
-
-
-@app.post("/categorize-text")
-async def categorize_text(data: TextData, user_id: int, db: Session = Depends(get_db)):
     try:
-        print(f"Received text:\n{data.text}")
-        print(f"User ID: {user_id}")
-        
-        category_keywords = {
-            "Groceries": ["rice", "cooking oil", "flour", "sugar", "salt", "apples", "tomato", "beef", "onion","cheese"],
-            "Food": ["soft drink", "pizza", "frozen pizza", "snack", "chocolate", "drink", "orange juice","fish"],
-            "Personal Care": ["face wash", "lip balm", "shampoo", "soap", "toothpaste", "chapstick"],
-            "Electronics": ["usb cable", "power bank", "charger", "earphones", "headphones"],
-            "Health": ["multivitamins", "vitamins", "bandages", "medicine", "first aid", "plaster"],
-            "Entertainment": ["movie", "dvd", "puzzle", "game", "board game", "blu-ray"],
-        }
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
 
-        categorized = defaultdict(float)
-        waiting_items = []
-        found_amounts = []
-        uncategorized_lines = []
+        # Ensure the file is a valid image
+        if file.content_type not in ["image/jpeg", "image/png", "image/tiff", "image/bmp"]:
+            raise HTTPException(status_code=400, detail="Unsupported file type")
 
-        lines = data.text.split("\n")
-        for line in lines:
-            original_line = line.strip()
-            line_clean = original_line.strip("=~-• ").lower()
-            if not line_clean:
-                continue
 
-            # Extract amount using broader regex (supports Rs/$/€ and commas)
-            amount_match = re.search(r"(?:[\$₹€Rs\.]?\s*)?(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+)", line_clean)
-            amount = 0.0
-            if amount_match:
-                try:
-                    amount_str = amount_match.group(1).replace(",", "")
-                    amount = float(amount_str)
-                except ValueError:
-                    print(f"Could not convert amount: {amount_match.group(1)}")
-
-            # Find category
-            matched_category = None
-            for category, keywords in category_keywords.items():
-                for keyword in keywords:
-                    if re.search(rf"\b{re.escape(keyword)}\b", line_clean):
-                        matched_category = category
-                        break
-                if matched_category:
-                    break
-
-            # Case 1: Category and amount on the same line
-            if matched_category and amount > 0:
-                categorized[matched_category] += amount
-                db.add(Expense(
-                    user_id=user_id,
-                    category=matched_category,
-                    amount=amount,
-                    description=original_line,
-                    created_at=datetime.now()
-                ))
-                print(f"Saved: {matched_category} - {amount} from '{original_line}'")
-            # Case 2: Category found, no amount
-            elif matched_category and amount == 0:
-                waiting_items.append((matched_category, original_line))
-                print(f"Matched item '{original_line}' but waiting for price...")
-            # Case 3: Amount found, no category
-            elif not matched_category and amount > 0:
-                found_amounts.append(amount)
-                print(f"Found amount {amount} without category from '{original_line}'")
-            # Case 4: Neither found
-            else:
-                uncategorized_lines.append(original_line)
-                print(f"No match for line: '{original_line}'")
-
-        # Match waiting items with leftover amounts
-        for i, (category, description) in enumerate(waiting_items):
-            if i < len(found_amounts):
-                amount = found_amounts[i]
-                categorized[category] += amount
-                db.add(Expense(
-                    user_id=user_id,
-                    category=category,
-                    amount=amount,
-                    description=f"{description} (${amount})",
-                    created_at=datetime.now()
-                ))
-                print(f"Backfilled: {category} - {amount} for '{description}'")
-            else:
-                uncategorized_lines.append(description)
-                print(f"No amount found for waiting item: '{description}'")
-
-        db.commit()
-
-        if not categorized:
-            categorized["Uncategorized"] = 0.0
-
-        return {
-            "raw_text": data.text,
-            "categorized": dict(sorted(categorized.items())),
-            "uncategorized_lines": uncategorized_lines
-        }
+        text = str(pytesseract.image_to_string(image))
+        return {"text": text}
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error processing the receipt: {str(e)}")
+
+
+@app.post("/categorize")
+def categorize_text(req: TextRequest):
+    try:
+        category = categorize_text_local(req.text)
+        return {"category": category}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+IGNORED_TERMS = {
+    "subtotal", "total", "tax", "thank you", "tel", "citystore", "cityville",
+    "invoice", "order no", "receipt", "date", "cashier", "payment", "balance",
+    "change", "amount due", "vat", "store", "example st"
+}
+
+@app.post("/categorize-receipt")
+async def categorize_receipt(
+    receipt: ReceiptText,
+    db: Session = Depends(get_db)
+):
+    user_id = receipt.user_id
+    text = receipt.text
+
+    categorized_totals = defaultdict(float)
+    all_categories = set()
+    line_items = []
+    uncategorized_lines = []
+    ignored_count = 0
+    alerts = []
+
+    raw_lines = text.split('\n')
+    lines = []
+    i = 0
+    while i < len(raw_lines):
+        current_line = raw_lines[i].strip()
+        if i + 1 < len(raw_lines):
+            next_line = raw_lines[i + 1].strip()
+            if (
+                not re.search(r'\d+', current_line) and
+                re.match(r'^\$?\d+(\.\d{1,2})?$', next_line)
+            ):
+                lines.append(f"{current_line} {next_line}")
+                i += 2
+                continue
+        lines.append(current_line)
+        i += 1
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Ignore address, date, and time lines
+        if re.search(r'\d{1,3}\s+\w+\s+(st|road|rd|ave|avenue|blvd|street|city|village|town)', line, re.IGNORECASE):
+            ignored_count += 1
+            continue
+        if re.search(r'\b\d{1,2}/\d{1,2}/\d{2,4}\b', line) or re.search(r'\b\d{1,2}:\d{2}\b', line):
+            ignored_count += 1
+            continue
+
+        # Extract amount
+        match = re.search(r'(\$?\d+(?:[.,]\d{1,2})?)\s*$', line)
+        amount = 0.0
+        if match:
+            try:
+                amount = float(match.group(1).replace(',', '').replace('₹', '').replace('$', '').replace('€', ''))
+            except ValueError:
+                continue
+        if amount == 0.0:
+            continue
+
+        clean_line = preprocess_line(line)
+        normalized_line = clean_line.lower()
+
+        if any(term in normalized_line for term in IGNORED_TERMS):
+            ignored_count += 1
+            continue
+
+        stripped_line = strip_price(clean_line).strip()
+        if not stripped_line:
+            continue
+
+        # Predict category
+        try:
+            probas = model.predict_proba([stripped_line])[0]
+            category = model.classes_[probas.argmax()]
+            confidence = probas.max()
+        except Exception:
+            category = "uncategorized"
+            confidence = 0.0
+
+        used_fallback = False
+        if confidence < 0.5 or category.lower() in ["unknown", "uncategorized"]:
+            try:
+                fallback_category = call_ollama_model(clean_line)
+                if fallback_category and fallback_category.lower() not in ["unknown", "item", "product"]:
+                    category = fallback_category
+                    used_fallback = True
+                else:
+                    category = "uncategorized"
+                    uncategorized_lines.append(line)
+            except Exception:
+                category = "uncategorized"
+                uncategorized_lines.append(line)
+
+        category = category.lower()
+        all_categories.add(category)
+
+        line_items.append({
+            "description": line,
+            "category": category,
+            "amount": amount
+        })
+
+        try:
+            new_expense = Expense(
+                user_id=user_id,
+                category=category,
+                amount=amount,
+                description=line
+            )
+            db.add(new_expense)
+            db.commit()
+            db.refresh(new_expense)
+            categorized_totals[category] += amount
+        except Exception:
+            db.rollback()
+
+    for category in all_categories:
+        categorized_totals.setdefault(category, 0.0)
+
+    return {
+        "categorized": {k: round(v, 2) for k, v in categorized_totals.items()},
+        "uncategorized_lines": uncategorized_lines,
+        "line_items": line_items,
+        "alerts": alerts
+    }
+
 
 @app.post("/expenses/add")
 def add_expense(
@@ -243,26 +298,135 @@ def add_expense(
     description: str = None,
     db: Session = Depends(get_db)
 ):
-    db_expense = Expense(
-        user_id=user_id,
-        category=category,
-        amount=amount,
-        description=description,
-    )
-    
-    db.add(db_expense)
-    db.commit()
-    db.refresh(db_expense)
+    try:
+        current_month = datetime.utcnow().strftime("%Y-%m")
 
-    return {
-        "msg": "Expense Added Successfully",
-        "status": "SUCCESS",
-        "expense": {
-            "id": db_expense.id,
-            "user_id": db_expense.user_id,
-            "category": db_expense.category,
-            "amount": db_expense.amount,
-            "description": db_expense.description,
-            "created_at": db_expense.created_at
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        budget = db.query(Budget).filter(
+            Budget.user_id == user_id,
+            Budget.category == category,
+            Budget.month == current_month
+        ).first()
+
+        total_spent = db.query(func.sum(Expense.amount)).filter(
+            Expense.user_id == user_id,
+            Expense.category == category,
+            func.date_format(Expense.created_at, '%Y-%m') == current_month
+        ).scalar() or 0.0
+
+        will_exceed = False
+        budget_alert = None
+        limit_percentage = 0.90
+
+        if budget:
+            if total_spent + amount > budget.amount:
+                will_exceed = True
+                budget_alert = "LIMIT EXCEEDED"
+            elif total_spent + amount >= budget.amount * limit_percentage:
+                budget_alert = "Near Limit"
+
+        db_expense = Expense(
+            user_id=user_id,
+            category=category,
+            amount=amount,
+            description=description,
+        )
+        db.add(db_expense)
+        db.commit()
+        db.refresh(db_expense)
+
+        return {
+            "msg": "Expense Added Successfully",
+            "status": "SUCCESS",
+            "budget_alert": budget_alert,
+            "expense": {
+                "id": db_expense.id,
+                "user_id": db_expense.user_id,
+                "category": db_expense.category,
+                "amount": db_expense.amount,
+                "description": db_expense.description,
+                "created_at": db_expense.created_at
+            }
         }
-    }
+
+    except Exception as e:
+        logger.exception("Error adding expense")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error adding expense")
+
+
+    
+
+@app.post("/budget/set", status_code=201)
+def set_budget(budget: BudgetRequest, db: Session = Depends(get_db)):
+    if budget.amount <= 0:
+        raise HTTPException(status_code=400, detail="Budget amount must be positive")
+
+    existing = db.query(Budget).filter(
+        Budget.user_id == budget.user_id,
+        Budget.category == budget.category,
+        Budget.month == budget.month
+    ).first()
+
+    if existing:
+        existing.amount = budget.amount
+        action = "updated"
+    else:
+        new_budget = Budget(
+            user_id=budget.user_id,
+            category=budget.category,
+            amount=budget.amount,
+            month=budget.month
+        )
+        db.add(new_budget)
+        action = "created"
+
+    db.commit()
+    return {"msg": f"Budget {action} successfully"}
+
+
+@app.get("/budget/alerts/{user_id}")
+def get_budget_alerts(user_id: int, db: Session = Depends(get_db)):
+    try:
+        current_month = datetime.utcnow().strftime("%Y-%m")
+        limit_percentage = 0.8  # Example: 80% threshold
+  
+        # Get all budgets for the user for the current month
+        budgets = db.query(Budget).filter(
+            Budget.user_id == user_id,
+            Budget.month == current_month
+        ).all()
+
+        alerts = []
+
+        for budget in budgets:
+            # Total spent in the budget category
+            total_spent = db.query(func.sum(Expense.amount)).filter(
+                Expense.user_id == user_id,
+                Expense.category == budget.category,
+                func.date_format(Expense.created_at, '%Y-%m') == current_month
+            ).scalar() or 0.0
+
+            if total_spent > budget.amount:
+                status = "EXCEEDED"
+            elif total_spent >= budget.amount * limit_percentage:
+                status = "NEAR_LIMIT"
+            else:
+                continue  
+
+            alerts.append({
+                "category": budget.category,
+                "budget": round(budget.amount, 2),
+                "spent": round(total_spent, 2),
+                "status": status
+            })
+            logger.info(f"[ALERT] {budget.category}: Spent {total_spent} of {budget.amount} → Status: {status}")
+
+        return {"alerts": alerts}
+
+    except Exception as e:
+        logger.error(f"Failed to fetch budget alerts: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch budget alerts")

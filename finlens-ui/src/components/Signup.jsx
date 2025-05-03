@@ -35,14 +35,20 @@ const Signup = () => {
 
 
         } catch (error) {
-            console.error('Error:', error.status);
-            if (error.status == 400) {
-                setError("Email already exists");
-            }
-            if (error.status == 422) {
-                setError("Password must be at least 6 characters long");
+            console.error('Error:', error);
+            if (error.response) {
+                if (error.response.status === 400) {
+                    setError("Email already exists");
+                } else if (error.response.status === 422) {
+                    setError("Password must be at least 6 characters long");
+                } else {
+                    setError("Something went wrong");
+                }
+            } else {
+                setError("Network error. Please try again later.");
             }
         }
+
     };
 
     return (
@@ -99,7 +105,7 @@ const Signup = () => {
                 </Button>
             </Form>
             <small className="text-white">Already have an account ?
-                <Link to={'/login'} className="text-decoration-none fw-bold " style={{color:'orange'}}>{''} Sign In</Link>
+                <Link to={'/login'} className="text-decoration-none fw-bold " style={{ color: 'orange' }}>{''} Sign In</Link>
             </small>
         </Container>
     );
