@@ -3,6 +3,7 @@ import { Button, Form, Container, Row, Col, Badge } from "react-bootstrap";
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
+const baseURL = "http://127.0.0.1:8000";
 
 const Login = () => {
     const [email, setEmail] = useState("");
@@ -10,8 +11,6 @@ const Login = () => {
     const [error, setError] = useState(null);
 
     const navigate = useNavigate();
-
-    let baseURL = "http://127.0.0.1:8000";
 
     const data = {
         email: email,
@@ -31,7 +30,7 @@ const Login = () => {
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             console.log('Login Success:', response);
 
             if (localStorage.getItem("user")) {
@@ -39,13 +38,14 @@ const Login = () => {
             }
             localStorage.setItem("user", JSON.stringify(response.data));
 
-            if (response.status == 200) {
+            if (response.status === 200) {
                 navigate('/home');
             }
 
 
         } catch (error) {
             console.error('Error:', error);
+            setPassword("");
             if (error.response) {
                 if (error.response && (error.response.status === 401 || error.response.status === 404)) {
                     setError("Invalid credentials.");
@@ -98,24 +98,27 @@ const Login = () => {
                     </Col>
 
                 </Row>
-
-
-
-
-                <Button variant="success" type="submit" className="my-3">
+                <Button
+                    variant="success"
+                    type="submit"
+                    className="my-3"
+                    disabled={!email || !password}
+                >
                     Login
                 </Button>
             </Form>
 
             <small className="text-white">Don't have an account ?
-                <Link to={'/signup'}
-                    className="text-decoration-none fw-bold" style={{ color: 'orange' }}>{''} Register</Link>
+                <Link to="/signup"
+                    className="text-decoration-none fw-bold"
+                    style={{ color: 'orange' }}>
+                    Register
+                </Link>
             </small>
         </Container>
     );
 };
 
 export default Login;
-
 
 

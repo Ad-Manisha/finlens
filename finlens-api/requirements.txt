@@ -1,4 +1,4 @@
-fastapi
+fastapi[all]
 uvicorn
 sqlalchemy
 pydantic
@@ -6,8 +6,19 @@ mysql-connector-python
 pymysql
 bcrypt
 tessaract-download
-pytesseract pillow
+pytesseract 
+pillow
 python-multipart
 openai
 python-dotenv
-openai python-dotenv
+openai 
+python-dotenv
+python-dateutil
+openai==0.28
+httpx
+pandas 
+scikit-learn
+joblib
+numpy
+requests
+Ollama-download

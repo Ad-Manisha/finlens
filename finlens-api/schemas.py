@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, EmailStr
 
 class RegisterUserRequest(BaseModel):
     name : str
@@ -13,14 +13,14 @@ class RegisterUserRequest(BaseModel):
             raise ValueError("Password must be longer than 6 characters")
         return value
 
-class RegisterUserResponse():
+class RegisterUserResponse(BaseModel):
     id: int
-    name : str
+    name : EmailStr
     email: str
 
-    class config:
-        orm_mode = True
-
+    class Config:
+        from_attributes = True
+        
 class LoginUserRequest(BaseModel):
     email: str
     password: str
@@ -28,5 +28,27 @@ class LoginUserRequest(BaseModel):
 
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
+class BudgetRequest(BaseModel):
+    user_id: int
+    category: str
+    amount: float
+    month: str
+
+class BudgetResponse(BaseModel):
+    id: int
+    user_id: int
+    category: str
+    amount: float
+    month: str
+
+    class Config:
+        from_attributes = True
+
+class TextRequest(BaseModel):
+    text: str
+
+class ReceiptText(BaseModel):
+    user_id: int
+    text: str
